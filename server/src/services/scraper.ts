@@ -7,18 +7,27 @@ class ScraperService {
       url: 'https://www.amazon.com',
       searchPath: '/s?k=',
       selectors: {
-        products: '.s-result-item[data-component-type="s-search-result"]',
-        title: 'h2 .a-link-normal',
-        price: '.a-price .a-offscreen',
-        rating: '.a-icon-star-small .a-icon-alt',
-        reviewCount: '.a-size-base.s-underline-text',
-        image: '.s-image',
+        products: 'div[data-component-type="s-search-result"]',
+        title: 'h2 a.a-link-normal span',
+        price: 'span.a-price span.a-offscreen',
+        rating: 'span[aria-label*="stars"]',
+        reviewCount: 'span[aria-label*="stars"] + span.a-size-base',
+        image: 'img.s-image',
+        link: 'h2 a.a-link-normal'
       }
     },
     'target': {
       url: 'https://www.target.com',
       searchPath: '/s?searchTerm=',
-      selectors: {}
+      selectors: {
+        products: 'div[data-test="product-card"]',
+        title: '[data-test="product-title"]',
+        price: '[data-test="product-price"]',
+        rating: '[data-test="product-rating"]',
+        reviewCount: '[data-test="product-reviews-count"]',
+        image: '[data-test="product-image"] img',
+        link: '[data-test="product-card-link"]'
+      }
     }
   };
 
@@ -87,24 +96,29 @@ class ScraperService {
       const priceText = await this.getElementText(item, retailerConfig.selectors.price || '');
       const price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
       const ratingText = await this.getElementText(item, retailerConfig.selectors.rating || '');
-      const rating = parseFloat(ratingText.split(' ')[0]);
+      const rating = parseFloat(ratingText.match(/\d+(\.\d+)?/)?.[0] || '0');
       const reviewCountText = await this.getElementText(item, retailerConfig.selectors.reviewCount || '');
-      const reviewCount = parseInt(reviewCountText.replace(/[^0-9]/g, ''));
+      const reviewCount = parseInt(reviewCountText.replace(/[^0-9]/g, '') || '0');
       const imageUrl = await this.getElementAttribute(item, retailerConfig.selectors.image || '', 'src');
+      const productUrl = await this.getElementAttribute(item, retailerConfig.selectors.link || '', 'href');
 
       if (!title || isNaN(price)) {
         return null;
       }
 
-      const qualityScore = this.calculateQualityScore(rating || 0, reviewCount || 0, title);
+      // Extract brand from title
+      const brandMatch = title.match(/^([A-Za-z]+)/);
+      const brand = brandMatch ? brandMatch[1] : 'Unknown';
+
+      const qualityScore = this.calculateQualityScore(rating || 0, reviewCount || 0, brand);
 
       return {
         id: `${retailer}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title,
-        brand: 'TBD', // TODO: Extract brand information
+        brand,
         price,
         imageUrl,
-        productUrl: '', // TODO: Extract product URL
+        productUrl: productUrl || '',
         retailer,
         rating: isNaN(rating) ? undefined : rating,
         reviewCount: isNaN(reviewCount) ? undefined : reviewCount,

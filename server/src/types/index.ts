@@ -40,6 +40,7 @@ export interface RetailerSelectors {
   rating: string;
   reviewCount: string;
   image: string;
+  link: string;
 }
 
 export interface RetailerConfig {
