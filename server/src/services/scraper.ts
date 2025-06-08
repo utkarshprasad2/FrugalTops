@@ -8,9 +8,9 @@ class ScraperService {
       searchPath: '/s?k=',
       selectors: {
         products: 'div[data-component-type="s-search-result"]',
-        title: 'h2 a.a-link-normal span',
-        price: 'span.a-price span.a-offscreen',
-        rating: 'span[aria-label*="stars"]',
+        title: 'h2 .a-text-normal',
+        price: '.a-price:not(.a-text-price) .a-offscreen',
+        rating: 'span.a-icon-alt',
         reviewCount: 'span[aria-label*="stars"] + span.a-size-base',
         image: 'img.s-image',
         link: 'h2 a.a-link-normal'
@@ -163,30 +163,55 @@ class ScraperService {
     try {
       const page = await browser.newPage();
       
-      // Set viewport and user agent
-      await page.setViewport({ width: 1280, height: 800 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      // Enhanced browser configuration
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      
+      // Add request interception to block unnecessary resources
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        if (req.resourceType() === 'document' || req.resourceType() === 'xhr') {
+          req.continue();
+        } else {
+          req.abort();
+        }
+      });
 
       const retailerConfig = this.retailers[retailer];
       if (!retailerConfig) {
         throw new Error(`Retailer ${retailer} not configured`);
       }
 
-      await page.goto(`${retailerConfig.url}${retailerConfig.searchPath}${encodeURIComponent(query)}`, {
-        waitUntil: 'networkidle0'
+      const searchUrl = `${retailerConfig.url}${retailerConfig.searchPath}${encodeURIComponent(query)}`;
+      console.log(`Searching ${retailer} with URL: ${searchUrl}`);
+
+      const response = await page.goto(searchUrl, {
+        waitUntil: 'networkidle0',
+        timeout: 30000
       });
 
+      if (!response?.ok()) {
+        const status = response?.status() ?? 'unknown';
+        const statusText = response?.statusText() ?? '';
+        throw new Error(`Failed to load search page: ${status} ${statusText}`);
+      }
+
+      // Wait for product elements to be visible
+      await page.waitForSelector(retailerConfig.selectors.products, { timeout: 10000 });
+      
       const products = await this.extractProductData(page, retailer);
+      console.log(`Found ${products.length} products from ${retailer}`);
 
       return {
         success: true,
         products
       };
-    } catch (error) {
-      console.error(`Scraping error: ${error}`);
+    } catch (error: unknown) {
+      console.error(`Scraping error for ${retailer}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       return {
         success: false,
-        error: 'Failed to scrape products'
+        error: `Failed to scrape products: ${errorMessage}`
       };
     } finally {
       await browser.close();
