@@ -33,8 +33,21 @@ class ScraperService {
 
   async initBrowser() {
     return await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      headless: "new",
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--window-size=1920,1080',
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      ],
+      defaultViewport: {
+        width: 1920,
+        height: 1080
+      },
+      timeout: 60000
     });
   }
 
@@ -159,18 +172,21 @@ class ScraperService {
 
   async searchProducts(query: string, retailer: string = 'amazon'): Promise<ScrapingResult> {
     const browser = await this.initBrowser();
+    let page;
     
     try {
-      const page = await browser.newPage();
+      page = await browser.newPage();
       
-      // Enhanced browser configuration
-      await page.setViewport({ width: 1920, height: 1080 });
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-      
-      // Add request interception to block unnecessary resources
+      // Block unnecessary resources
       await page.setRequestInterception(true);
       page.on('request', (req) => {
-        if (req.resourceType() === 'document' || req.resourceType() === 'xhr') {
+        const resourceType = req.resourceType();
+        if (
+          resourceType === 'document' ||
+          resourceType === 'xhr' ||
+          resourceType === 'fetch' ||
+          resourceType === 'script'
+        ) {
           req.continue();
         } else {
           req.abort();
@@ -182,25 +198,87 @@ class ScraperService {
         throw new Error(`Retailer ${retailer} not configured`);
       }
 
+      // Update Amazon selectors to be more resilient
+      if (retailer === 'amazon') {
+        retailerConfig.selectors = {
+          products: '[data-component-type="s-search-result"]',
+          title: 'span.a-text-normal',
+          price: 'span.a-price span.a-offscreen',
+          rating: 'span.a-icon-alt',
+          reviewCount: 'span[aria-label*="stars"] + span.a-size-base',
+          image: 'img.s-image',
+          link: 'a.a-link-normal.s-no-outline'
+        };
+      }
+
       const searchUrl = `${retailerConfig.url}${retailerConfig.searchPath}${encodeURIComponent(query)}`;
       console.log(`Searching ${retailer} with URL: ${searchUrl}`);
 
-      const response = await page.goto(searchUrl, {
-        waitUntil: 'networkidle0',
-        timeout: 30000
-      });
+      // Navigate with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      let navigationSuccess = false;
 
-      if (!response?.ok()) {
-        const status = response?.status() ?? 'unknown';
-        const statusText = response?.statusText() ?? '';
-        throw new Error(`Failed to load search page: ${status} ${statusText}`);
+      while (retryCount < maxRetries && !navigationSuccess) {
+        try {
+          await page.goto(searchUrl, {
+            waitUntil: ['networkidle0', 'domcontentloaded'],
+            timeout: 60000
+          });
+          navigationSuccess = true;
+        } catch (error) {
+          console.log(`Navigation attempt ${retryCount + 1} failed:`, error);
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
 
-      // Wait for product elements to be visible
-      await page.waitForSelector(retailerConfig.selectors.products, { timeout: 10000 });
-      
+      // Wait for product elements with retry
+      const productSelector = retailerConfig.selectors.products;
+      if (!productSelector) {
+        throw new Error(`Product selector not configured for ${retailer}`);
+      }
+
+      let productsVisible = false;
+      retryCount = 0;
+
+      while (retryCount < maxRetries && !productsVisible) {
+        try {
+          await page.waitForSelector(productSelector, {
+            timeout: 30000,
+            visible: true
+          });
+          productsVisible = true;
+        } catch (error) {
+          console.log(`Waiting for products attempt ${retryCount + 1} failed:`, error);
+          retryCount++;
+          if (retryCount === maxRetries) {
+            throw error;
+          }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+
+      // Add a delay to ensure dynamic content is loaded
+      await page.waitForTimeout(3000);
+
+      // Scroll to load all products
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await page.waitForTimeout(1000);
+
       const products = await this.extractProductData(page, retailer);
       console.log(`Found ${products.length} products from ${retailer}`);
+
+      if (products.length === 0) {
+        // Take a screenshot for debugging
+        await page.screenshot({ path: 'debug-screenshot.png' });
+        console.log('No products found. Page content:', await page.content());
+      }
 
       return {
         success: true,
@@ -208,12 +286,18 @@ class ScraperService {
       };
     } catch (error: unknown) {
       console.error(`Scraping error for ${retailer}:`, error);
+      if (page) {
+        await page.screenshot({ path: 'error-screenshot.png' });
+      }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       return {
         success: false,
         error: `Failed to scrape products: ${errorMessage}`
       };
     } finally {
+      if (page) {
+        await page.close();
+      }
       await browser.close();
     }
   }
