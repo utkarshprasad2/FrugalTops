@@ -2,17 +2,30 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import { scraperService } from './services/scraper';
+import productsRouter from './routes/products';
+import wishlistRouter from './routes/wishlist';
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
 
+// Routes
+app.use('/api/products', productsRouter);
+app.use('/api/wishlist', wishlistRouter);
+
 // Connect to MongoDB
 mongoose.connect('mongodb://localhost:27017/frugaltops')
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => {
+    console.log('Connected to MongoDB');
+    app.listen(port, () => {
+      console.log(`Server is running on port ${port}`);
+    });
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error);
+  });
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -64,8 +77,4 @@ app.get('/api/products/search', async (req, res) => {
       error: 'Internal server error occurred while searching for products'
     });
   }
-});
-
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
 }); 
