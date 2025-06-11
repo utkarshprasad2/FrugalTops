@@ -1,5 +1,8 @@
 import puppeteer, { Page, ElementHandle } from 'puppeteer';
 import { Product, ScrapingResult, RetailerConfigs, RetailerConfig } from '../types';
+import axios from 'axios';
+import cheerio from 'cheerio';
+import { ProductModel } from '../models/Product';
 
 class ScraperService {
   private retailers: RetailerConfigs = {
@@ -30,6 +33,8 @@ class ScraperService {
       }
     }
   };
+
+  private browser: puppeteer.Browser | null = null;
 
   async initBrowser() {
     return await puppeteer.launch({
@@ -300,6 +305,43 @@ class ScraperService {
       }
       await browser.close();
     }
+  }
+
+  async updateProductPriceHistory(product: any, newPrice: number) {
+    product.priceHistory.push({
+      price: newPrice,
+      date: new Date()
+    });
+    product.currentPrice = newPrice;
+    await product.save();
+  }
+
+  async scrapeProductDetails(url: string, page: Page): Promise<Product> {
+    const product = await this.extractProductInfo(page);
+    
+    // Check if product already exists in database
+    let existingProduct = await ProductModel.findOne({ productUrl: url });
+    
+    if (existingProduct) {
+      // Update price history if price has changed
+      if (existingProduct.currentPrice !== product.price) {
+        await this.updateProductPriceHistory(existingProduct, product.price);
+      }
+      return existingProduct;
+    }
+    
+    // Create new product with initial price history
+    const newProduct = new ProductModel({
+      ...product,
+      currentPrice: product.price,
+      priceHistory: [{
+        price: product.price,
+        date: new Date()
+      }]
+    });
+    
+    await newProduct.save();
+    return newProduct;
   }
 }
 

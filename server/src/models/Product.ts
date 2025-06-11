@@ -1,22 +1,53 @@
 import mongoose from 'mongoose';
-import { Product } from '../types';
+import { Product, PricePoint } from '../types';
+
+const priceHistorySchema = new mongoose.Schema<PricePoint>({
+  price: {
+    type: Number,
+    required: true
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  }
+});
 
 const productSchema = new mongoose.Schema<Product>({
-  id: { type: String, required: true, unique: true },
-  title: { type: String, required: true },
-  brand: { type: String, required: true },
-  price: { type: Number, required: true },
-  originalPrice: { type: Number },
-  description: { type: String },
-  imageUrl: { type: String, required: true },
-  productUrl: { type: String, required: true },
-  retailer: { type: String, required: true },
-  rating: { type: Number },
-  reviewCount: { type: Number },
-  qualityScore: { type: Number },
-  sizes: [{ type: String }],
-  colors: [{ type: String }],
-  dateScraped: { type: Date, default: Date.now }
+  title: {
+    type: String,
+    required: true
+  },
+  price: {
+    type: Number,
+    required: true
+  },
+  currentPrice: {
+    type: Number,
+    required: true
+  },
+  imageUrl: {
+    type: String,
+    required: true
+  },
+  productUrl: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  store: {
+    type: String,
+    required: true
+  },
+  description: String,
+  brand: String,
+  category: String,
+  sizes: [String],
+  colors: [String],
+  dateScraped: {
+    type: Date,
+    default: Date.now
+  },
+  priceHistory: [priceHistorySchema]
 });
 
 // Create indexes for common queries
