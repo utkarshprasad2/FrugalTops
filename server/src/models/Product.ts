@@ -56,4 +56,6 @@ productSchema.index({ price: 1 });
 productSchema.index({ qualityScore: 1 });
 productSchema.index({ title: 'text' });
 
-export const ProductModel = mongoose.model<Product>('Product', productSchema); 
+export const ProductModel = mongoose.model<Product>('Product', productSchema);
+
+export { Product }; 
