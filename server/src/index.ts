@@ -5,6 +5,9 @@ import { scraperService } from './services/scraper';
 import productsRouter from './routes/products';
 import wishlistRouter from './routes/wishlist';
 import priceAlertsRouter from './routes/priceAlerts';
+import recommendationsRouter from './routes/recommendations';
+import socialRouter from './routes/social';
+import dealAlertsRouter from './routes/dealAlerts';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -16,6 +19,9 @@ app.use(express.json());
 app.use('/api/products', productsRouter);
 app.use('/api/wishlist', wishlistRouter);
 app.use('/api/price-alerts', priceAlertsRouter);
+app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/social', socialRouter);
+app.use('/api/deal-alerts', dealAlertsRouter);
 
 // Connect to MongoDB
 mongoose.connect('mongodb://localhost:27017/frugaltops')
