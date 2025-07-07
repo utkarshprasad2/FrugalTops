@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import ProductAnalyticsDashboard from './components/ProductAnalyticsDashboard';
+import SmartBudgetTracker from './components/SmartBudgetTracker';
 
 const queryClient = new QueryClient();
 
@@ -93,6 +95,18 @@ function Navigation() {
               className={`text-gray-600 hover:text-indigo-600 ${location.pathname === '/' ? 'text-indigo-600 font-medium' : ''}`}
             >
               Search
+            </Link>
+            <Link
+              to="/analytics"
+              className={`text-gray-600 hover:text-indigo-600 ${location.pathname === '/analytics' ? 'text-indigo-600 font-medium' : ''}`}
+            >
+              Analytics
+            </Link>
+            <Link
+              to="/budget"
+              className={`text-gray-600 hover:text-indigo-600 ${location.pathname === '/budget' ? 'text-indigo-600 font-medium' : ''}`}
+            >
+              Budget
             </Link>
             <Link
               to="/history"
@@ -515,6 +529,8 @@ function App() {
       <main>
         <Routes>
           <Route path="/" element={<SearchPage />} />
+          <Route path="/analytics" element={<ProductAnalyticsDashboard />} />
+          <Route path="/budget" element={<SmartBudgetTracker />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/profile" element={<ProfilePage />} />
         </Routes>
